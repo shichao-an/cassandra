@@ -504,6 +504,7 @@ public class DatabaseDescriptor
         {
             int preferredSize = 4096;
             int minSize = 0;
+            int size = 0;
             try
             {
                 // use 1/8th of available space.  See discussion on #10013 and #10199 on the CL, taking half that for CDC
@@ -518,13 +519,21 @@ public class DatabaseDescriptor
             if (minSize < preferredSize)
             {
                 logger.warn("Small cdc volume detected at {}; setting cdc_total_space_in_mb to {}.  You can override this in cassandra.yaml",
-                            conf.cdc_raw_directory, minSize);
-                conf.cdc_total_space_in_mb = minSize;
+                            conf.cdc_raw_directory, minSize + conf.commitlog_total_space_in_mb);
+                size = minSize;
             }
             else
             {
-                conf.cdc_total_space_in_mb = preferredSize;
+                size = preferredSize;
             }
+
+            // add size and commitlog_total_space_in_mb as we hard-link files in cdc_raw
+            conf.cdc_total_space_in_mb = size + conf.commitlog_total_space_in_mb;
+        }
+        else
+        {
+            if (conf.cdc_total_space_in_mb < conf.commitlog_total_space_in_mb)
+                logger.error("cdc_total_space_in_mb is smaller than commitlog_total_space_in_mb.  If cdc_enabled is true, the writes may fail at some point before CLs and hard links in cdc_raw can be recycled.");
         }
 
         if (conf.cdc_enabled)
